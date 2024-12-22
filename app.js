@@ -35,7 +35,7 @@ app.use("/", (req, res) => {
 });
 
 // Create HTTP server with express app
-// const server = http.createServer(app);
+const server = http.createServer(app);
 
 // // Set up Socket.io on the same server
 // const io = new Server(server, {
