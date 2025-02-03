@@ -28,7 +28,7 @@ router.post("/register", async (req, res) => {
     });
     console.log(validation);
 
-    // If validation fails, send error response
+    // If validation fails
     if (!validation.success) {
       return res
         .status(400)
