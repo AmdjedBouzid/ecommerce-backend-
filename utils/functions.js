@@ -55,20 +55,31 @@ function generateRandomPin() {
 const GetAdmin = async (req) => {
   try {
     await connectDB();
-    const token = req.headers.authorization?.split(" ")[1]; // Bearer <token>
-    // console.log("teken_____", token);
+    // console.log("coling GetAdmin");
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res
+        .status(401)
+        .json({ message: "Unauthorized, no token provided" });
+    }
+
+    const token = authHeader.split(" ")[1]; // Extract token from "Bearer TOKEN_VALUE"
+    console.log("Received token:", token);
+
     if (!token) {
       return { message: "No token provided", status: 404 };
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    //console.log("decoded_______", decoded);
+    // console.log("decoded_______", decoded);
     const admin = await Admin.findOne({});
+    // console.log("admin", admin);
     if (!decoded || !admin) {
       return { message: "No admin  found", status: 404 };
     }
 
-    return { admin, messsage: "admin found", status: 200 };
+    return { admin, message: "admin found", status: 200 };
   } catch (error) {
     console.error("Error in GetAdmin:", error);
     return { message: "Invalid or expired token", status: 404 };

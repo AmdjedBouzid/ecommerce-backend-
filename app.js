@@ -2,47 +2,43 @@ const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
 const http = require("http");
-const { Server } = require("socket.io");
+const cookieParser = require("cookie-parser");
 
 // Routes
 const register = require("./routes/auth/register");
 const login = require("./routes/auth/login");
 const pinVerificationRoute = require("./routes/auth/pin-verification");
-const categoryroutes = require("./routes/Brand");
-const productroute = require("./routes/perfume");
-// const ExempleRoute = require("./routes/example");
-// const messagesRoute = require("./routes/messages");
+const brandsRoute = require("./routes/Brand");
+const perfumesRoute = require("./routes/perfume");
+const orderRoute = require("./routes/Order");
 
 const app = express();
 
-// Use middleware
+// Middleware
 app.use(morgan("dev"));
-app.use(cors({ origin: "*" }));
-app.use(express.json());
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
 
-// Define Routes
+app.use(express.json());
+app.use(cookieParser());
+
+// Routes
 app.use("/api/auth", register);
 app.use("/api/auth", login);
 app.use("/api/auth", pinVerificationRoute);
-app.use("/api/category", categoryroutes);
-app.use("/api/product", productroute);
-// app.use("/api/exemple", ExempleRoute);
-// app.use("/api/messages", messagesRoute);
+app.use("/api/Brand", brandsRoute);
+app.use("/api/Perfume", perfumesRoute);
+app.use("/api/Order", orderRoute);
 
-app.use("/", (req, res) => {
-  return res.status(200).send("Welcome to my stylish page!");
+app.get("/", (req, res) => {
+  res.status(200).send("Welcome to my stylish page!");
 });
 
-// Create HTTP server with express app
-const server = http.createServer(app);
-
-// // Set up Socket.io on the same server
-// const io = new Server(server, {
-//   cors: {
-//     origin: "*",
-//     methods: ["GET", "POST"],
-//   },
-// });
-// hundllingMessages(io);
+// Start Server
 const PORT = process.env.PORT || 5000;
+const server = http.createServer(app);
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

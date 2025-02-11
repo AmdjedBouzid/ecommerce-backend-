@@ -15,37 +15,26 @@ const { registerSchema } = require("../../utils/validation");
 router.post("/register", async (req, res) => {
   try {
     const { username, email, password, phonenumber } = req.body;
-
-    // Connect to the database
     await connectDB();
-
-    // Validate request body
     const validation = registerSchema.safeParse({
       username,
       email,
       password,
       phonenumber,
     });
-    console.log(validation);
-
-    // If validation fails
+    console.log("validation", validation);
     if (!validation.success) {
       return res
         .status(400)
         .json({ message: validation.error.errors[0].message });
     }
-
-    // Verify email using external API (Hunter.io)
     const response = await axios.get(
       `https://api.hunter.io/v2/email-verifier?email=${email}&api_key=${process.env.EMAIL_VEREFICATION_API_KEY}`
     );
-
-    // If email verification fails, send an error response
     if (response.data.data.status === "invalid") {
       return res.status(400).json({ message: "Invalid email" });
     }
-
-    // Check if admin already exists
+    console.log(111111111111);
     const existingAdmin = await Admin.findOne({});
     console.log("existingAdmin________", existingAdmin);
     if (existingAdmin) {
@@ -64,8 +53,6 @@ router.post("/register", async (req, res) => {
       phonenumber,
     });
     await newAdmin.save();
-
-    // Send success response
     res.status(200).json({
       message: "Admin registered successfully",
       admin: newAdmin,

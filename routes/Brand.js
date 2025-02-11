@@ -1,228 +1,221 @@
 const express = require("express");
 const router = express.Router();
 const { connectDB } = require("../config/db");
-const { GetAdmin } = require("../utils/functions");
 const { VerifyAdmin } = require("../middleware");
 const Brand = require("../models/Brand");
 const { BrandSchema } = require("../utils/validation");
 const { Global_Validation } = require("../utils/functions");
-const Product = require("../models/Perfume");
+const Perfume = require("../models/Perfume");
+const { faker } = require("@faker-js/faker");
+
 /**
  * @method POST
  * @route http://localhost:5000/api/Brand
- * @description verify admin by token
- * @access public
+ * @description Add a new brand (Admin)
+ * @access Private
  */
 router.post("/", async (req, res) => {
   try {
-    // console.log(req);
-    const { name, img, description } = req.body;
-    console.log({ name, img, description });
-    const valid = Global_Validation(BrandSchema, {
-      name,
-      img,
-      description,
-    });
+    await connectDB();
 
+    let { name, img, description } = req.body;
+    name = name.trim();
+    img = img.trim();
+    description = description.trim();
+
+    const valid = Global_Validation(BrandSchema, { name, img, description });
     if (!valid.status) {
       return res.status(400).json({ message: valid.message });
     }
 
-    await connectDB();
-
-    const existingCategory = await Category.findOne({
+    const existingBrand = await Brand.findOne({
       name: new RegExp(`^${name}$`, "i"),
     });
-
-    if (existingCategory) {
-      return res
-        .status(400)
-        .json({ message: "Category with this name already exists" });
+    if (existingBrand) {
+      return res.status(400).json({ message: "الشركة موجودة بالفعل" });
     }
 
-    const newCategory = new Category({
-      name,
-      img,
-      description,
-    });
+    const newBrand = new Brand({ name, img, description });
+    await newBrand.save();
 
-    await newCategory.save();
-
-    res
-      .status(201)
-      .json({ message: "category created successfully", data: newCategory });
+    res.status(201).json({ message: "تمت إضافة الشركة بنجاح", data: newBrand });
   } catch (error) {
     console.error(error);
-
     res
       .status(500)
-      .json({ message: "Server error, unable to create category" });
+      .json({ message: "حدث خطأ في السيرفر، فشل في إضافة الشركة" });
   }
 });
 
 /**
  * @method GET
- * @route http://localhost:5000/api/category
- * @description get all categories
- * @access Private
+ * @route http://localhost:5000/api/Brand
+ * @description Get all brands
+ * @access Public
  */
-
 router.get("/", async (req, res) => {
   try {
     await connectDB();
-    const categorys = await Category.find().populate("products");
+    const brands = await Brand.find().populate("Perfume");
 
-    res.status(200).json({ message: "Success fetching categories", categorys });
+    res.status(200).json({ message: "تم جلب الشركات بنجاح", brands });
   } catch (error) {
     console.error(error);
-    res
-      .status(500)
-      .json({ message: "Server error, error fetching categories" });
+    res.status(500).json({ message: "خطأ في السيرفر، فشل في جلب الشركات" });
   }
 });
 
 /**
  * @method GET
- * @route http://localhost:5000/api/category/:name
- * @description get category by name
- * @access public
+ * @route http://localhost:5000/api/Brand/:id
+ * @description Get brand by ID
+ * @access Public
  */
-router.get("/:name", async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     await connectDB();
-    const { name } = req.params;
+    const { id } = req.params;
+    const brand = await Brand.findById(id).populate("Perfume");
 
-    // Assuming you are using a MongoDB model named 'Category'
-    const category = await Category.findOne({ name }).populate("products");
-
-    if (!category) {
-      return res.status(404).json({ message: "Category not found" });
+    if (!brand) {
+      return res.status(404).json({ message: "الشركة غير موجودة" });
     }
 
-    res.status(200).json(category);
+    res.status(200).json(brand);
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error(error);
+    res.status(500).json({ message: "خطأ في السيرفر، فشل في جلب الشركة" });
   }
 });
 
 /**
  * @method PUT
- * @route http://localhost:5000/api/category/:name
- * @description update category
- * @access public
+ * @route http://localhost:5000/api/Brand/:id
+ * @description Update brand by ID (Admin)
+ * @access Private
  */
-router.put("/:name", async (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
     await connectDB();
-    const { name, img, description } = req.body;
-    console.log({ name, img, description });
-    const currentName = req.params.name;
-    const Current_Collection = await Category.findOne({
-      name: new RegExp(`^${currentName}$`, "i"),
-    });
-    if (!Current_Collection) {
-      return res.status(404).json({ message: "No Category found " });
-    }
-    const valid = Global_Validation(categorySchema, {
-      name,
-      img,
-      description,
-    });
+
+    let { name, img, description } = req.body;
+    name = name.trim();
+    img = img.trim();
+    description = description.trim();
+
+    const { id } = req.params;
+
+    const valid = Global_Validation(BrandSchema, { name, img, description });
     if (!valid.status) {
       return res.status(400).json({ message: valid.message });
     }
 
-    const existingCategory = await Category.findOne({
-      name: new RegExp(`^${name}$`, "i"),
+    const existingBrand = await Brand.findOne({
+      _id: id,
     });
-
-    if (existingCategory) {
-      return res
-        .status(400)
-        .json({ message: "Category with this name already exists" });
+    if (!existingBrand) {
+      return res.status(400).json({ message: "الشركة غير موجودة" });
     }
-
-    var updatedCategory = await Category.findOneAndUpdate(
-      { name: currentName },
+    similarBrand = await Brand.find({
+      name: name,
+    });
+    if (similarBrand.length > 1) {
+      console.log(similarBrand);
+      return res.status(404).json({ message: "الشركة موجودة في مخزنك من قبل" });
+    }
+    const updatedBrand = await Brand.findByIdAndUpdate(
+      id,
       { name, img, description },
       { new: true }
-    ).populate("products");
+    );
 
-    if (!updatedCategory) {
-      return res.status(404).json({ message: "Category not found" });
+    if (!updatedBrand) {
+      return res.status(404).json({ message: "الشركة غير موجودة" });
     }
 
-    res.status(200).json({
-      message: "Category updated successfully",
-      data: updatedCategory,
-    });
+    res
+      .status(200)
+      .json({ message: "تم تحديث الشركة بنجاح", data: updatedBrand });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "خطأ في السيرفر، فشل في تحديث الشركة" });
+  }
+});
+
+/**
+ * @method DELETE
+ * @route http://localhost:5000/api/Brand/:id
+ * @description Delete brand by ID (Admin)
+ * @access Private
+ */
+router.delete("/:id", async (req, res) => {
+  try {
+    await connectDB();
+    const { id } = req.params;
+
+    const brand = await Brand.findById(id);
+    if (!brand) {
+      return res.status(404).json({ message: "الشركة غير موجودة" });
+    }
+
+    await Perfume.deleteMany({ _id: { $in: brand.Perfume } });
+
+    await Brand.findByIdAndDelete(id);
+
+    res.status(200).json({ message: "تم حذف الشركة بنجاح" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "خطأ في السيرفر، فشل في حذف الشركة" });
+  }
+});
+
+/**
+ * @method DELETE
+ * @route http://localhost:5000/api/Brand/delete/all
+ * @description Delete all brands and their products (Admin)
+ * @access Private
+ */
+router.delete("/delete/all", async (req, res) => {
+  try {
+    await connectDB();
+    const brands = await Brand.find();
+
+    for (const brand of brands) {
+      await Perfume.deleteMany({ _id: { $in: brand.Perfume } });
+    }
+
+    await Brand.deleteMany();
+    res.status(200).json({ message: "تم حذف جميع الشركات ومنتجاتها بنجاح" });
   } catch (error) {
     console.error(error);
     res
       .status(500)
-      .json({ message: "Server error, unable to update category" });
+      .json({ message: "خطأ في السيرفر، فشل في حذف جميع الشركات" });
   }
 });
 
-/**
- * @method DELETE
- * @route http://localhost:5000/api/category/:name
- * @description DELETE category
- * @access public
- */
-
-router.delete("/:name", async (req, res) => {
+router.post("/generate", async (req, res) => {
   try {
-    await connectDB();
-    const currentName = req.params.name;
-    const Current_Collection = await Category.findOne({ name: currentName });
-
-    if (!Current_Collection) {
-      return res.status(404).json({ message: "No Category found " });
+    for (let i = 0; i < 20; i++) {
+      await connectDB();
+      const item = {
+        name: faker.company.name().trim(),
+        img: faker.image.url(),
+        description: faker.commerce.productDescription(),
+      };
+      const existBrand = await Brand.findOne({ name: item.name });
+      if (!existBrand) {
+        const newBrand = new Brand(item);
+        await newBrand.save();
+      }
     }
-    // console.log(
-    //   "Current_Collection",
-    //   Current_Collection.products,
-    //   "______",
-    //   currentName
-    // );
-    Current_Collection.products.forEach(async function (element, index, array) {
-      await Product.deleteOne({ id: element });
-    });
-    await Category.deleteOne({ name: currentName });
-    return res.status(200).json({ message: "category deleted successfully" });
+
+    return res.status(200).json({ message: "Brands generated successfully" });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: error });
-  }
-});
-
-/**
- * @method DELETE
- * @route http://localhost:5000/api/category/delete
- * @description DELETE delete all categorys
- * @access public
- */
-
-router.delete("/delete/all", VerifyAdmin, async (req, res) => {
-  try {
-    await connectDB();
-    const Categorys = await Category.find();
-    console.log("Categorys", Categorys);
-
-    Categorys.forEach((cat) => {
-      cat.products.forEach(async (id) => {
-        await Product.deleteOne({ _id: id });
-      });
-    });
-
-    await Category.deleteMany();
-    res.status(200).json({
-      message: "All categories and their products deleted successfully",
-    });
-  } catch (error) {
-    console.log("error", error);
-    res.status(500).json({ message: "Internal server error", error });
+    console.error("Error in /generate route:", error);
+    return res
+      .status(500)
+      .json({ message: "Failed to generate brands", error });
   }
 });
 

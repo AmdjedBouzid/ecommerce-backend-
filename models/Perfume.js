@@ -22,7 +22,7 @@ const PerfumeSchema = new mongoose.Schema({
     type: [String],
     required: true,
   },
-  Brand: {
+  brandId: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
     ref: "Brand",

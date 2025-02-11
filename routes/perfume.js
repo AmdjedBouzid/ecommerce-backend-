@@ -1,293 +1,251 @@
 const express = require("express");
 const router = express.Router();
 const { connectDB } = require("../config/db");
-const { GetAdmin } = require("../utils/functions");
 const { VerifyAdmin } = require("../middleware");
-const Category = require("../models/Brand");
-const { categorySchema, PerfumeSchema } = require("../utils/validation");
+const Brand = require("../models/Brand");
+const Perfume = require("../models/Perfume");
+const { PerfumeSchema } = require("../utils/validation");
 const { Global_Validation } = require("../utils/functions");
-const Product = require("../models/Perfume");
+const { faker } = require("@faker-js/faker");
+
 /**
  * @method POST
- * @route http://localhost:5000/api/product
- * @description  add product
- * @access private  verify admin by token
+ * @route http://localhost:5000/api/Perfume
+ * @description إضافة عطر جديد
+ * @access خاص (للمسؤولين فقط)
  */
-
-router.post("/", VerifyAdmin, async (req, res) => {
+router.post("/", async (req, res) => {
   try {
-    const valid = Global_Validation(productSchema, req.body);
+    const valid = Global_Validation(PerfumeSchema, req.body);
     if (!valid.status) {
       return res.status(400).json({ message: valid.message });
     }
 
     await connectDB();
-    const { name, price, description, sizes, images, category } = req.body;
+    const { name, description, bottles, images, brandId } = req.body;
 
-    if (category.toLowerCase() === name.toLowerCase()) {
-      return res.status(400).json({
-        message: "Name of product and name of category are the same",
-      });
-    }
-
-    const ExistCategoryWithSameName = await Category.findOne({
+    const existingPerfume = await Perfume.findOne({
       name: new RegExp(`^${name}$`, "i"),
+      brandId: brandId,
     });
-    if (ExistCategoryWithSameName) {
-      return res.status(400).json({
-        message: "Category with the same name as your product already exists",
-      });
+
+    if (existingPerfume) {
+      return res.status(409).json({ message: "العطر موجود في مخزنك من قبل" });
     }
 
-    const existingProduct = await Product.findOne({
-      name: new RegExp(`^${name}$`, "i"),
-    });
-    if (existingProduct) {
-      return res.status(409).json({
-        message: "Product with this name already exists!",
-      });
+    const BRAND = await Brand.findById(brandId);
+    if (!BRAND) {
+      return res.status(404).json({ message: "لم يتم العثور على شركة المنتج" });
     }
 
-    const CATEGORY = await Category.findOne({ name: category });
-    if (!CATEGORY) {
-      return res
-        .status(404)
-        .json({ message: "Category for product not found" });
-    }
-
-    const newProduct = new Product({
+    const newPerfume = new Perfume({
       name,
-      price,
       description,
-      sizes,
+      bottles,
       images,
-      category,
+      brandId: brandId,
     });
 
-    await newProduct.save();
-
-    CATEGORY.products.push(newProduct._id);
-    await CATEGORY.save();
+    await newPerfume.save();
+    BRAND.Perfume.push(newPerfume._id);
+    await BRAND.save();
 
     return res.status(201).json({
-      message: "Product added successfully!",
-      product: newProduct,
+      message: "تمت إضافة العطر بنجاح",
+      Perfume: newPerfume,
     });
   } catch (error) {
+    console.log(error);
     return res.status(500).json({
-      message: "Failed to add product",
+      message: "خطأ في الخادم، فشل إضافة المنتج",
       error: error.message,
     });
   }
 });
 
-router.get("/many", VerifyAdmin, async (req, res) => {
+/**
+ * @method GET
+ * @route http://localhost:5000/api/Perfume?page=1&limit=6
+ * @description  الحصول على جميع العطور
+ * @access خاص (للمسؤولين فقط)
+ */
+router.get("/", async (req, res) => {
   try {
-    const Ids = req.body.IDs;
     await connectDB();
-    if (!Ids) {
-      res.status(400).json({ message: "Invalid IDs" });
-    }
-
-    for (let i = 0; i < Ids.length; i++) {
-      console.log(Ids[i]);
-    }
-    return res.status(200).json({ message: "success to access to root", Ids });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 8;
+    const skip = (page - 1) * limit;
+    const perfumes = await Perfume.find().skip(skip).limit(limit);
+    return res.json(perfumes);
   } catch (error) {
-    return res.status(500).json({ message: "internal server error" });
+    console.log(error);
+    return res.status(500).json({ message: "خطأ أثناء جلب العطور", error });
   }
 });
 
 /**
  * @method GET
- * @route http://localhost:5000/api/product
- * @description  get all products product
- * @access private  verify admin by token
+ * @route http://localhost:5000/api/Perfume/:id
+ * @description  الحصول على عطر معين عبر الـ ID
+ * @access خاص (للمسؤولين فقط)
  */
-
-router.get("/", VerifyAdmin, async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     await connectDB();
-    const All_Products = await Product.find();
-    return res.status(200).json(All_Products);
-  } catch (error) {
-    console.log("error", error);
-    return res.status(500).json({ message: "internal server error", error });
-  }
-});
+    const PerfumeId = req.params.id;
+    const PerfumeFounded = await Perfume.findById(PerfumeId);
 
-/**
- * @method GET
- * @route http://localhost:5000/api/product/:id
- * @description  get single product by id
- * @access private  verify admin by token
- */
-
-router.get("/:id", VerifyAdmin, async (req, res) => {
-  try {
-    await connectDB();
-
-    const Product_Id = req.params.id;
-
-    const Product_Finded = await Product.findById(Product_Id);
-
-    if (!Product_Finded) {
-      return res.status(404).json({ message: "Product not found" });
+    if (!PerfumeFounded) {
+      return res.status(404).json({ message: "لم يتم العثور على المنتج" });
     }
 
     return res
       .status(200)
-      .json({ message: "Product found successfully", Product_Finded });
+      .json({ message: "تم العثور على العطر بنجاح", PerfumeFounded });
   } catch (error) {
     console.log("error", error);
-    return res.status(500).json({ message: "Internal server error", error });
+    return res.status(500).json({ message: "خطأ داخلي في الخادم", error });
   }
 });
 
 /**
  * @method DELETE
- * @route http://localhost:5000/api/product/:id
- * @description  delete single product by id
- * @access private  verify admin by token
+ * @route http://localhost:5000/api/Perfume/:id
+ * @description  حذف عطر معين عبر الـ ID
+ * @access خاص (للمسؤولين فقط)
  */
-router.delete("/:id", VerifyAdmin, async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
-    const Product_Id = req.params.id;
+    const PerfumeId = req.params.id;
     await connectDB();
-
-    const Product_Finded = await Product.findById(Product_Id);
-
-    if (!Product_Finded) {
-      return res.status(404).json({ message: "Product not found" });
+    const PerfumeFind = await Perfume.findById(PerfumeId);
+    if (!PerfumeFind) {
+      return res.status(404).json({ message: "العطر غير موجود" });
     }
-
-    const category_name = Product_Finded.category;
-
-    const category = await Category.findOne({ name: category_name });
-    if (!category) {
-      return res.status(404).json({ message: "Category of product not found" });
+    const BrandId = PerfumeFind.brandId;
+    const BRAND = await Brand.findById(BrandId);
+    if (!BRAND) {
+      return res.status(404).json({ message: "لم يتم العثور على الشركة" });
     }
-
-    category.products = category.products.filter(
-      (id) => id.toString() !== Product_Id
+    BRAND.Perfume = BRAND.Perfume.filter(
+      (item) => item.toString() !== PerfumeId
     );
+    await BRAND.save();
+    await Perfume.deleteOne({ _id: PerfumeId });
 
-    await category.save();
-
-    await Product.deleteOne({ _id: Product_Id });
-
-    return res.status(200).json({
-      message: "Product deleted successfully",
-    });
+    return res.status(200).json({ message: "تم حذف العطر بنجاح" });
   } catch (error) {
-    console.error("Error deleting product:", error);
-    return res.status(500).json({ message: "Internal server error", error });
+    console.error("خطأ أثناء حذف العطر:", error);
+    return res.status(500).json({ message: "خطأ داخلي في الخادم", error });
   }
 });
 
 /**
- * @method DELETE
- * @route http://localhost:5000/api/product/:id
- * @description  delete single product by id
- * @access private  verify admin by token
+ * @method PUT
+ * @route http://localhost:5000/api/Perfume/:id
+ * @description  تحديث بيانات العطر
+ * @access خاص (للمسؤولين فقط)
  */
-router.put("/:id", VerifyAdmin, async (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
-    const valid = Global_Validation(productSchema, req.body);
+    const PerfumeId = req.params.id;
+    const valid = Global_Validation(PerfumeSchema, req.body);
     if (!valid.status) {
       return res.status(400).json({ message: valid.message });
     }
 
-    const Product_Id = req.params.id;
     await connectDB();
+    const { name, description, bottles, images, brandId } = req.body;
 
-    const { name, price, description, sizes, images, category } = req.body;
-
-    const Old_Product = await Product.findById(Product_Id);
-    if (!Old_Product) {
-      return res.status(404).json({ message: "Product not found" });
+    const existingPerfume = await Perfume.findById(PerfumeId);
+    if (!existingPerfume) {
+      return res.status(404).json({ message: "العطر غير موجود" });
     }
 
-    const New_Product = await Product.findByIdAndUpdate(
-      { _id: Product_Id },
-      { $set: { name, price, description, sizes, images, category } },
-      { new: true }
-    );
+    const duplicatePerfume = await Perfume.findOne({
+      name: new RegExp(`^${name}$`, "i"),
+      brandId: brandId,
+      _id: { $ne: PerfumeId },
+    });
 
-    console.log("Old_Product", Old_Product, "New_Product", New_Product);
-
-    if (Old_Product.category !== New_Product.category) {
-      const Old_Category = await Category.findOne({
-        name: Old_Product.category,
-      });
-
-      const New_Category = await Category.findOne({
-        name: New_Product.category,
-      });
-
-      if (Old_Category) {
-        Old_Category.products = Old_Category.products.filter(
-          (p) => p.toString() !== Product_Id
-        );
-        await Old_Category.save();
-      }
-
-      if (New_Category) {
-        New_Category.products.push(Product_Id);
-        await New_Category.save();
-      }
+    if (duplicatePerfume) {
+      return res
+        .status(409)
+        .json({ message: "يوجد بالفعل عطر بنفس الاسم في هذه الشركة" });
     }
+
+    existingPerfume.name = name;
+    existingPerfume.description = description;
+    existingPerfume.bottles = bottles;
+    existingPerfume.images = images;
+    existingPerfume.brandId = brandId;
+
+    await existingPerfume.save();
 
     return res.status(200).json({
-      message: "Product updated successfully",
-      product: New_Product,
+      message: "تم تحديث العطر بنجاح",
+      Perfume: existingPerfume,
     });
   } catch (error) {
-    console.log("Error:", error);
-    return res.status(500).json({ message: "Internal server error", error });
+    console.log(error);
+    return res.status(500).json({
+      message: "خطأ في الخادم، فشل تحديث المنتج",
+      error: error.message,
+    });
   }
 });
 
 /**
- * @method GET
- * @route http://localhost:5000/api/product/search/:name
- * @description  delete single product by id
- * @access private  verify admin by token
+ * @method POST
+ * @route http://localhost:5000/api/Perfume/generate
+ * @description  إنشاء بيانات عطور عشوائية
+ * @access خاص (للمسؤولين فقط)
  */
-
-router.get("/search/:name", VerifyAdmin, async (req, res) => {
+router.post("/generate", async (req, res) => {
   try {
     await connectDB();
-
-    const searchQuery = req.params.name;
-
-    if (!searchQuery) {
-      return res.status(400).json({ message: "Search query missing" });
+    const Brands = await Brand.find();
+    if (Brands.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "لا توجد شركات في قاعدة البيانات" });
     }
 
-    const products = await Product.find({
-      name: { $regex: searchQuery, $options: "i" },
-    });
+    for (let i = 0; i < 100; i++) {
+      const randomIndex = faker.number.int({ min: 0, max: Brands.length - 1 });
+      const brand = Brands[randomIndex];
+      const perfumeName = faker.commerce.productName();
+      const existingPerfume = await Perfume.findOne({
+        name: perfumeName,
+        brandId: brand._id,
+      });
 
-    if (products.length === 0) {
-      return res.status(404).json({ message: "No products found" });
+      if (existingPerfume) {
+        console.log(
+          `تخطي العطر المكرر: ${perfumeName} في الشركة ${brand.name}`
+        );
+        continue;
+      }
+
+      const newPerfume = await Perfume.create({
+        name: perfumeName,
+        description: faker.commerce.productDescription(),
+        bottles: [{ size: 50, price: 100 }],
+        images: [faker.image.url()],
+        brandId: brand._id,
+      });
+
+      await Brand.updateOne(
+        { _id: brand._id },
+        { $push: { Perfume: newPerfume._id } }
+      );
     }
 
-    return res.status(200).json({
-      message: "Products found successfully",
-      products,
-    });
+    return res.status(200).json({ message: "تم إنشاء العطور بنجاح" });
   } catch (error) {
-    console.log("Error:", error);
-    return res.status(500).json({ message: "Internal server error", error });
+    console.error("خطأ في /generate:", error);
+    return res.status(500).json({ message: "فشل إنشاء العطور", error });
   }
 });
-
-/**
- * @method GET
- * @route http://localhost:5000/api/product/many
- * @description  delete single product by id
- * @access private  verify admin by token
- */
 
 module.exports = router;

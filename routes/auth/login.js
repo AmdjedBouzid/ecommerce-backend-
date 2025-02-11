@@ -6,7 +6,7 @@ const Pin = require("../../models/Pin");
 const { connectDB } = require("../../config/db");
 const { registerSchema } = require("../../utils/validation");
 const { generateRandomPin, Send_Email } = require("../../utils/functions");
-
+const { VerifyAdmin } = require("../../middleware");
 const router = express.Router();
 
 /**
@@ -66,27 +66,20 @@ router.post("/login", async (req, res) => {
       !isPhoneNumberValid ||
       !isPasswordValid
     ) {
-      return res.status(403).json({ error: "Invalid login credentials." });
+      return res.status(403).json({ message: "معلومات تسجيل الدخول خاطئة" });
     }
-
-    // Generate a random PIN code
     const pinCode = generateRandomPin();
-
-    // Send the PIN via email
     const emailResponse = await Send_Email(email, pinCode);
     if (emailResponse.success === true) {
       try {
-        // Check if there are existing PINs in the database and remove them
         const existingPins = await Pin.find({});
         if (existingPins.length > 0) {
           await Pin.deleteMany({});
         }
 
-        // Save the new PIN
         const newPin = new Pin({ code: pinCode });
         await newPin.save();
 
-        // Respond with success
         return res.status(200).json(emailResponse);
       } catch (error) {
         return res
@@ -101,5 +94,21 @@ router.post("/login", async (req, res) => {
     return res.status(500).json({ error: "Server error", details: error });
   }
 });
+router.post("/me", VerifyAdmin, async (req, res) => {
+  try {
+    const admin = req.admin;
+    const returnAdmin = {
+      _id: admin._id,
+      username: admin.username,
+      email: admin.email,
+      phonenumber: admin.phonenumber,
+      profileImg: admin.profileImg,
+    };
 
+    return res.status(200).json({ message: "admin found", admin: returnAdmin });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Server error", details: error });
+  }
+});
 module.exports = router;
