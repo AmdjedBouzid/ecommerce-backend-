@@ -16,21 +16,26 @@ const { faker } = require("@faker-js/faker");
  */
 router.post("/", async (req, res) => {
   try {
+    console.log("req.body", req.body);
     const valid = Global_Validation(PerfumeSchema, req.body);
     if (!valid.status) {
       return res.status(400).json({ message: valid.message });
     }
 
     await connectDB();
-    const { name, description, bottles, images, brandId } = req.body;
-
+    let { name, description, bottles, images, brandId, sex, quality } =
+      req.body;
+    (name = name?.trim()),
+      (description = description?.trim()),
+      (brandId = brandId?.trim());
+    sex = sex.trim();
     const existingPerfume = await Perfume.findOne({
       name: new RegExp(`^${name}$`, "i"),
       brandId: brandId,
     });
 
     if (existingPerfume) {
-      return res.status(409).json({ message: "العطر موجود في مخزنك من قبل" });
+      return res.status(404).json({ message: "العطر موجود في مخزنك من قبل" });
     }
 
     const BRAND = await Brand.findById(brandId);
@@ -44,6 +49,8 @@ router.post("/", async (req, res) => {
       bottles,
       images,
       brandId: brandId,
+      sex,
+      quality,
     });
 
     await newPerfume.save();
@@ -58,7 +65,7 @@ router.post("/", async (req, res) => {
     console.log(error);
     return res.status(500).json({
       message: "خطأ في الخادم، فشل إضافة المنتج",
-      error: error.message,
+      error: error,
     });
   }
 });
@@ -75,8 +82,23 @@ router.get("/", async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 8;
     const skip = (page - 1) * limit;
-    const perfumes = await Perfume.find().skip(skip).limit(limit);
-    return res.json(perfumes);
+    const search = req.query.search || "";
+    console.log("search", search);
+    let query = {};
+
+    if (search.trim() !== "") {
+      query.name = { $regex: search, $options: "i" };
+    }
+
+    const perfumes = await Perfume.find(query)
+      .skip(skip)
+      .limit(limit)
+      .populate("brandId");
+    console.log("perfumes", perfumes.length);
+    const totalItems = await Perfume.countDocuments(query);
+    console.log("totalItems", totalItems);
+
+    return res.json({ perfumes, totalItems });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ message: "خطأ أثناء جلب العطور", error });
@@ -170,7 +192,7 @@ router.put("/:id", async (req, res) => {
 
     if (duplicatePerfume) {
       return res
-        .status(409)
+        .status(404)
         .json({ message: "يوجد بالفعل عطر بنفس الاسم في هذه الشركة" });
     }
 

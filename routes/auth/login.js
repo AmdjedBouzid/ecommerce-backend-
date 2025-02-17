@@ -23,7 +23,11 @@ router.post("/login", async (req, res) => {
     await connectDB();
 
     // Parse the request body to get the admin data
-    const { username, email, password, phonenumber } = req.body;
+    let { username, email, password, phonenumber } = req.body;
+    (username = username?.trim()),
+      (email = email?.trim()),
+      (password = password?.trim()),
+      (phonenumber = phonenumber?.trim());
     console.log("request:", { username, email, password, phonenumber });
 
     const validation = registerSchema.safeParse({

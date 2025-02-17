@@ -1,5 +1,5 @@
 const { z } = require("zod");
-
+const mongoose = require("mongoose");
 const registerSchema = z.object({
   username: z.string().min(3, { message: "اسم المستخدم غير صالح" }).max(100),
   email: z
@@ -26,8 +26,14 @@ const BrandSchema = z.object({
 const PerfumeSchema = z.object({
   name: z.string().min(3, { message: "اسم المنتج مطلوب" }),
   description: z.string().min(10, { message: "الوصف مطلوب" }),
-  images: z.array(z.string().url({ message: "رابط الصورة غير صالح" })),
   brandId: z.string().min(3, { message: "الفئة مطلوبة" }),
+  images: z
+    .array(z.string().url({ message: "رابط الصورة غير صالح" }))
+    .nonempty({ message: "يجب إدخال صورة على الأقل" }),
+  quality: z.number().int({ message: "يجب أن تكون الجودة عددًا صحيحًا" }),
+  sex: z.enum(["Male", "Female"], {
+    message: "يجب أن يكون الجنس 'ذكر' أو 'أنثى'",
+  }),
   bottles: z
     .array(
       z.object({
@@ -42,27 +48,53 @@ const PerfumeSchema = z.object({
     )
     .nonempty({ message: "يجب إدخال حجم زجاجة واحد على الأقل" }),
 });
-const OrderSchemaValidation = z.object({
-  customerName: z
-    .string()
-    .min(3, "يجب أن يحتوي الاسم على 3 أحرف على الأقل")
-    .trim(),
-  customerEmail: z
-    .string()
-    .email("البريد الإلكتروني غير صالح")
-    .trim()
-    .toLowerCase(),
-  phoneNumber: z
-    .array(z.string().min(8, "رقم الهاتف غير صالح"))
+const orderSchema = z.object({
+  customerName: z.string().min(1, "اسم الزبون مطلوب"),
+  customerFamilyName: z.string().min(1, "اللقب مطلوب"),
+  customerEmail: z.string().email("البريد الإلكتروني غير صالح"),
+  phonenumber: z
+    .array(
+      z
+        .string()
+        .regex(/^\d{9,15}$/, "رقم الهاتف غير صالح، يجب أن يحتوي على 9-15 رقمًا")
+    )
     .min(1, "يجب إدخال رقم هاتف واحد على الأقل"),
-  delivery: z.string().min(1, "يجب تحديد خيار التوصيل"),
-  perfumeInOrder: z.array(z.string().min(1, "يجب إضافة منتج واحد على الأقل")),
-  State: z.enum(["waiting", "accepted", "rejected"]).default("waiting"),
-  totalPrice: z.number().min(0, "السعر الإجمالي يجب أن يكون رقمًا موجبًا"),
+
+  delivery: z.object({
+    willaya: z.string().min(1, "الولاية مطلوبة"),
+    price: z.number().min(0, "سعر التوصيل يجب أن يكون رقمًا موجبًا"),
+  }),
+
+  perfumeInOrder: z
+    .array(
+      z.object({
+        Perfume: z
+          .string()
+          .refine((val) => mongoose.Types.ObjectId.isValid(val), {
+            message: "معرف العطر غير صالح",
+          }),
+        bottles: z
+          .array(
+            z.object({
+              size: z.number().positive("حجم الزجاجة يجب أن يكون رقمًا موجبًا"),
+              price: z.number().positive("السعر يجب أن يكون رقمًا موجبًا"),
+              quantity: z
+                .number()
+                .int()
+                .positive("الكمية يجب أن تكون عددًا صحيحًا موجبًا")
+                .default(1),
+            })
+          )
+          .min(1, "يجب إدخال زجاجة واحدة على الأقل"),
+      })
+    )
+    .min(1, "يجب إدخال عطر واحد على الأقل"),
+
+  totalPrice: z.number().optional(),
 });
 module.exports = {
   registerSchema,
   BrandSchema,
   PerfumeSchema,
-  OrderSchemaValidation,
+  orderSchema,
 };

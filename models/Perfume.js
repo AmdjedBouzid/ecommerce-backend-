@@ -11,13 +11,17 @@ const PerfumeSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
+  sex: {
+    type: String,
+    enum: ["Male", "Female"],
+    required: true,
+  },
   bottles: [
     {
       size: { type: Number, required: true },
       price: { type: Number, required: true },
     },
   ],
-
   images: {
     type: [String],
     required: true,
@@ -27,6 +31,7 @@ const PerfumeSchema = new mongoose.Schema({
     required: true,
     ref: "Brand",
   },
+  quality: { type: Number, required: true },
 });
 
 const Perfume =

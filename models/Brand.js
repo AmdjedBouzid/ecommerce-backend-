@@ -23,6 +23,7 @@ const BrandSchema = new Schema({
     type: String,
     default: "",
   },
+  createdAt: { type: Date, default: Date.now },
 });
 const Brand = mongoose.models.Brand || mongoose.model("Brand", BrandSchema);
 
